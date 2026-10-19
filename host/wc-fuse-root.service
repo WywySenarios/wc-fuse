@@ -1,0 +1,12 @@
+[Unit]
+Description=WywyCode FUSE workspace root setup
+After=systemd-tmpfiles-setup.service
+Before=systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/libexec/wc/wc-fuse-root @USER@
+
+[Install]
+WantedBy=multi-user.target

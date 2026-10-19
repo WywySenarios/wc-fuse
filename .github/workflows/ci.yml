@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+      - name: gofmt test suite
+        run: ./scripts/tests/gofmt
+      - name: shell_parse test suite
+        run: ./scripts/tests/shell_parse
+      - name: go_test test suite
+        run: ./scripts/tests/go_test
+
+  fuse:
+    name: real-mount (Docker-in-Docker, privileged /dev/fuse)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+      - name: run the real-mount suite with /dev/fuse
+        run: |
+          docker run --rm --privileged \
+            -v /dev/fuse:/dev/fuse \
+            -v "$PWD":/src -w /src \
+            -e WC_FUSE_MOUNT_TEST=1 \
+            golang:1.24-alpine \
+            sh -c 'apk add --no-cache fuse3 bash git && go test -race ./fusefs/'
+
+  gitleaks:
+    name: secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# wc-fuse.service (systemd user unit) entry point.
+#
+# The root unit (wc-fuse-root.service) has already made /dev/wc rshared
+# and handed workspace/control to this user, so the daemon runs with no
+# privileges.
+set -euo pipefail
+
+DAEMON="${WC_FUSE_DAEMON:-$HOME/.local/bin/wc-fuse-daemon}"
+
+exec "$DAEMON" \
+	--socket "${WC_FUSE_SOCKET:-/dev/wc/control/wc-fuse.sock}" \
+	--workspace "${WC_FUSE_WORKSPACE:-/dev/wc/workspace}" \
+	--config "${WC_FUSE_CONFIG:-/etc/wc/config.d}" \
+	"$@"

@@ -1,0 +1,5 @@
+*.test
+*.out
+/wc-fuse-daemon
+/go.work
+/go.work.sum
