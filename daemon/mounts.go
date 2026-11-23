@@ -3,6 +3,8 @@ package daemon
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -68,6 +70,9 @@ func (m *MountManager) Mount(projectRoot string, store *policy.Store) (string, e
 		return ex.mountPoint, nil
 	}
 	mp := filepath.Join(m.workspace, ProjectHash(key))
+	if err := os.MkdirAll(mp, 0o711); err != nil {
+		return "", fmt.Errorf("create mount point %s: %w", mp, err)
+	}
 	srv, err := m.mounter.Mount(key, mp, store)
 	if err != nil {
 		return "", err

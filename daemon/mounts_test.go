@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -46,14 +47,15 @@ func (s *fakeServer) Unmount() error {
 
 func TestMountManagerLifecycle(t *testing.T) {
 	m := newFakeMounter()
-	mg := NewMountManager(m, "/dev/wc/workspace")
+	workspace := t.TempDir()
+	mg := NewMountManager(m, workspace)
 	root := "/home/eric/src/proj"
 
 	mp, err := mg.Mount(root, nil)
 	if err != nil {
 		t.Fatalf("Mount: %v", err)
 	}
-	if want := filepath.Join("/dev/wc/workspace", ProjectHash(root)); mp != want {
+	if want := filepath.Join(workspace, ProjectHash(root)); mp != want {
 		t.Errorf("mount point = %q, want %q", mp, want)
 	}
 	if mg.OpenMounts() != 1 {
@@ -83,6 +85,21 @@ func TestMountManagerLifecycle(t *testing.T) {
 	// Idempotent: unmounting again is a no-op.
 	if err := mg.Unmount(root); err != nil {
 		t.Fatalf("second Unmount: %v", err)
+	}
+}
+
+func TestMountCreatesMountpoint(t *testing.T) {
+	mg := NewMountManager(newFakeMounter(), t.TempDir())
+	mp, err := mg.Mount("/home/eric/src/proj", nil)
+	if err != nil {
+		t.Fatalf("Mount: %v", err)
+	}
+	info, err := os.Stat(mp)
+	if err != nil {
+		t.Fatalf("mount point was not created: %v", err)
+	}
+	if !info.IsDir() {
+		t.Errorf("mount point is not a directory: %s", mp)
 	}
 }
 
