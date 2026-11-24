@@ -22,6 +22,12 @@ jobs:
         run: ./scripts/tests/shell_parse
       - name: go_test test suite
         run: ./scripts/tests/go_test
+      - name: install uv
+        uses: astral-sh/setup-uv@v5
+      - name: sync the ansible toolchain
+        run: uv sync --frozen
+      - name: ansible_syntax test suite
+        run: ./scripts/tests/ansible_syntax
 
   fuse:
     name: real-mount (Docker-in-Docker, privileged /dev/fuse)

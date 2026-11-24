@@ -1,0 +1,11 @@
+[Unit]
+Description=WywyCode FUSE workspace daemon
+After=default.target
+
+[Service]
+Type=simple
+ExecStart={{ wc_fuse_bin }} --socket {{ wc_fuse_socket }} --workspace {{ wc_fuse_workspace }} --config {{ wc_fuse_config_dir }} --allowed-uid {{ wc_fuse_allowed_uid }} --reload-interval {{ wc_fuse_reload_interval }}
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

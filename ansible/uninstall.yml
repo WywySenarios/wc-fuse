@@ -1,0 +1,19 @@
+---
+- name: remove the unprivileged daemon
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: remove the user half
+      ansible.builtin.import_role:
+        name: wc_fuse
+        tasks_from: uninstall_user
+
+- name: remove the root side
+  hosts: localhost
+  connection: local
+  become: true
+  tasks:
+    - name: remove the root half
+      ansible.builtin.import_role:
+        name: wc_fuse
+        tasks_from: uninstall_root

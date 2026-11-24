@@ -3,3 +3,5 @@
 /wc-fuse-daemon
 /go.work
 /go.work.sum
+/.venv/
+/ansible/roles/wc_fuse/files/wc-fuse-daemon

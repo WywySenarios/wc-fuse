@@ -1,0 +1,72 @@
+---
+- name: check for the root unit
+  ansible.builtin.stat:
+    path: /etc/systemd/system/wc-fuse-root.service
+  register: wc_fuse_root_unit
+
+- name: stop and disable the root setup unit
+  ansible.builtin.systemd_service:
+    name: wc-fuse-root.service
+    state: stopped
+    enabled: false
+    daemon_reload: true
+  when: wc_fuse_root_unit.stat.exists
+
+- name: remove the root unit and the tmpfiles snippet
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/wc-fuse-root.service
+    - /etc/tmpfiles.d/wc.conf
+
+- name: check whether /dev/wc is a mountpoint
+  ansible.builtin.command: mountpoint -q /dev/wc
+  register: wc_fuse_devwc
+  changed_when: false
+  failed_when: false
+
+- name: unmount /dev/wc
+  ansible.builtin.command: umount /dev/wc
+  when: wc_fuse_devwc.rc == 0
+  failed_when: false
+
+- name: re-check /dev/wc
+  ansible.builtin.command: mountpoint -q /dev/wc
+  register: wc_fuse_devwc_after
+  changed_when: false
+  failed_when: false
+
+- name: refuse to delete a mounted /dev/wc
+  ansible.builtin.fail:
+    msg: "/dev/wc is still a mountpoint; unmount it before teardown"
+  when: wc_fuse_devwc_after.rc == 0
+
+- name: remove the /dev/wc tree
+  ansible.builtin.file:
+    path: /dev/wc
+    state: absent
+
+- name: read the linger state
+  ansible.builtin.command: loginctl show-user {{ wc_fuse_user }} --property=Linger --value
+  register: wc_fuse_linger
+  changed_when: false
+
+- name: disable login linger
+  ansible.builtin.command: loginctl disable-linger {{ wc_fuse_user }}
+  when: wc_fuse_linger.stdout | trim == 'yes'
+
+- name: remove the policy directory
+  ansible.builtin.file:
+    path: "{{ wc_fuse_config_dir }}"
+    state: absent
+
+- name: remove user_allow_other from /etc/fuse.conf
+  ansible.builtin.lineinfile:
+    path: /etc/fuse.conf
+    regexp: "^user_allow_other"
+    state: absent
+
+- name: reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true

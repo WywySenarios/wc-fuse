@@ -1,0 +1,9 @@
+[project]
+name = "wc-fuse-provisioning"
+version = "0.0.0"
+description = "Host provisioning for wc-fuse"
+requires-python = ">=3.13"
+dependencies = ["ansible-core==2.22.0"]
+
+[tool.uv]
+package = false

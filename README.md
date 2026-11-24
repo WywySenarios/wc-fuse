@@ -7,7 +7,6 @@ WywyCode's host-side FUSE workspace, responsible for:
 - rwx policy engine
 - FUSE daemon
 - FUSE control socket
-- systemD units & installer
 
 This repo does not provide a client.
 
@@ -69,8 +68,22 @@ JSON over `/dev/wc/control/wc-fuse.sock`:
 
 ## Installation
 
+Clone with submodules (`git clone --recurse-submodules …`) or initialize them
+with `git submodule update --init`.
+
 ```sh
-scripts/install.sh --dry-run    # preview
-scripts/install.sh              # install
-scripts/uninstall.sh            # remove
+uv sync
+make provision
+```
+
+Run the commands as the user that will own the workspace.
+
+Overrides that might interest you:
+
+- `wc_fuse_allowed_uid` (default `10001`, the pod uid), passed with `make provision ARGS="-e wc_fuse_allowed_uid=…"`
+
+### Uninstallation
+
+```sh
+make uninstall
 ```

@@ -1,0 +1,41 @@
+---
+- name: ensure the user directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ wc_fuse_bin | dirname }}"
+    - "{{ wc_fuse_home }}/.config/systemd/user"
+
+- name: check the daemon artifact
+  ansible.builtin.stat:
+    path: "{{ role_path }}/files/wc-fuse-daemon"
+  register: wc_fuse_artifact
+
+- name: require a built daemon artifact
+  ansible.builtin.assert:
+    that: wc_fuse_artifact.stat.exists
+    fail_msg: "the daemon artifact is missing; run `make daemon` first"
+
+- name: install the daemon
+  ansible.builtin.copy:
+    src: wc-fuse-daemon
+    dest: "{{ wc_fuse_bin }}"
+    mode: "0755"
+
+- name: install the user unit
+  ansible.builtin.template:
+    src: wc-fuse.service.j2
+    dest: "{{ wc_fuse_home }}/.config/systemd/user/wc-fuse.service"
+    mode: "0644"
+  notify: restart the user daemon
+
+- name: start and enable the user daemon
+  ansible.builtin.systemd_service:
+    name: wc-fuse.service
+    scope: user
+    daemon_reload: true
+    enabled: true
+    state: started
+  when: not ansible_check_mode

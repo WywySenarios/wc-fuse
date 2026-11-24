@@ -1,0 +1,4 @@
+[submodule "wc-config"]
+	path = ansible/roles/wc_fuse/files/wc-config
+	url = https://github.com/WywySenarios/wc-config.git
+	branch = main

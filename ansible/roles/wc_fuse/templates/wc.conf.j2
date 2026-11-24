@@ -1,9 +1,7 @@
 # /dev/wc is a devtmpfs path, so it is recreated empty on every boot.
 # This tmpfiles.d snippet re-establishes the tree at 0711; the root unit
-# (wc-fuse-root.service) then hands workspace/control to the invoking
-# user and marks /dev/wc rshared.
-#
-# Install: /etc/tmpfiles.d/wc.conf
+# (wc-fuse-root.service) then hands workspace/control to {{ wc_fuse_user }}
+# and marks /dev/wc rshared.
 
 d /dev/wc 0711 root root -
 d /dev/wc/workspace 0711 root root -

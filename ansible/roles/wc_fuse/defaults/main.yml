@@ -1,0 +1,11 @@
+---
+wc_fuse_user: "{{ lookup('env', 'USER') }}"
+
+wc_fuse_home: "{{ ansible_facts['env']['HOME'] }}"
+wc_fuse_bin: "{{ wc_fuse_home }}/.local/bin/wc-fuse-daemon"
+wc_fuse_socket: /dev/wc/control/wc-fuse.sock
+wc_fuse_workspace: /dev/wc/workspace
+wc_fuse_config_dir: /etc/wc/config.d
+
+wc_fuse_allowed_uid: 10001
+wc_fuse_reload_interval: 2s

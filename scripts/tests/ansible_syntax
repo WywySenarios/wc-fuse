@@ -1,0 +1,20 @@
+#!/bin/bash
+set -euo pipefail
+
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+cd "$SCRIPT_DIR/../.."
+
+if [ -x .venv/bin/ansible-playbook ]; then
+	playbook_bin=.venv/bin/ansible-playbook
+elif command -v ansible-playbook >/dev/null 2>&1; then
+	playbook_bin=ansible-playbook
+else
+	echo "ansible_syntax: ansible-playbook required (uv sync) — failing closed" >&2
+	exit 1
+fi
+
+echo "==> ansible-playbook --syntax-check"
+for playbook in ansible/site.yml ansible/uninstall.yml; do
+	"$playbook_bin" --syntax-check "$playbook" >/dev/null
+	echo "    ok: $playbook"
+done

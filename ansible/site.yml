@@ -1,0 +1,19 @@
+---
+- name: provision the host side of wc-fuse
+  hosts: localhost
+  connection: local
+  become: true
+  tasks:
+    - name: install the root half
+      ansible.builtin.import_role:
+        name: wc_fuse
+        tasks_from: root
+
+- name: install the unprivileged daemon
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: install the user half
+      ansible.builtin.import_role:
+        name: wc_fuse
+        tasks_from: user

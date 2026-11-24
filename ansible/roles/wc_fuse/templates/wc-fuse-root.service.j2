@@ -6,7 +6,7 @@ Before=systemd-user-sessions.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/local/libexec/wc/wc-fuse-root @USER@
+ExecStart=/bin/sh -c 'set -e; mountpoint -q /dev/wc || mount --bind /dev/wc /dev/wc; mount --make-rshared /dev/wc; chown {{ wc_fuse_user }} /dev/wc/workspace /dev/wc/control'
 
 [Install]
 WantedBy=multi-user.target

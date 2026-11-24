@@ -16,3 +16,8 @@ repos:
         entry: ./scripts/tests/go_test
         language: system
         pass_filenames: false
+      - id: ansible-syntax
+        name: ansible_syntax
+        entry: ./scripts/tests/ansible_syntax
+        language: system
+        pass_filenames: false
