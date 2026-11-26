@@ -12,16 +12,20 @@ This repo does not provide a client.
 
 ## A brief explanation
 
-The daemon and its root setup helper are host-side; on the machine that contains the files you want to have a FUSE over (and consequently outside of a container).
+The daemon should run on the host containing the files you want to mount over.
 
-The daemon trusts no pod input beyond `{session_id, project_root}`.
+The daemon trusts no input beyond `{session_id, project_root}`.
+Clients must supply their own IDs.
 
-- **Policy is host-authoritative.** The daemon reads `fs.yaml` (rwx rules) and `project-roots.yaml` (the allowlist) from the host config clone (`/etc/wc/config.d`), never from the pod. It refuses any `project_root` outside the allowlist.
-- Some superuser actions are needed, including:
-  - `/dev/wc` is root-created (0711) by tmpfiles
-  - the `wc-fuse-root.service` **system** unit marks `/dev/wc` as rshared
-  - `/dev/wc/workspace` & `/dev/wc/control` and their permissions are modified for unprivileged use
-- the `wc-fuse.service` **user** unit runs the unprivileged daemon.
+### Filesystem
+
+This FUSE's goal is to create a permissions restricted mountpoint at `/dev/wc/workspace/<hash>`.
+The hash is calculated based on the source directory.
+Implementation detail: multiple consumers asking for the same source directory will result in those consumers sharing the same mountpoint.
+
+The client is responsible for finding a way to get that directory into the filepath.
+You cannot configure where the destination of the mountpoint is.
+For example, you can bind-mount `/dev/wc/workspace/<hash>` into a Docker container.
 
 ## Permissions & Configuration
 
@@ -53,18 +57,20 @@ Example `/etc/wc/config.d/project-roots.yaml`:
 
 ```yaml
 project_roots:
-  - /home/eric/src
+  - /srv/wc/projects
 ```
 
 ## Control protocol
 
 JSON over `/dev/wc/control/wc-fuse.sock`:
 
-| op        | request                                               | response                                          |
-| --------- | ----------------------------------------------------- | ------------------------------------------------- |
-| `mount`   | `{"op":"mount","session_id":"s","project_root":"/p"}` | `{"ok":true,"mount_point":"...","open_mounts":n}` |
-| `unmount` | `{"op":"unmount","project_root":"/p"}`                | `{"ok":true,"open_mounts":n}`                     |
-| `status`  | `{"op":"status"}`                                     | `{"ok":true,"open_mounts":n}`                     |
+| op        | request                                                                                                                                                                     | response                                          |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `mount`   | `{"op":"mount","session_id":"s","project_root":"/p"}` — `session_id` is required and must be non-empty                                                                      | `{"ok":true,"mount_point":"...","open_mounts":n}` |
+| `unmount` | `{"op":"unmount","session_id":"s","project_root":"/p"}` releases session `s`'s hold; `{"op":"unmount","project_root":"/p"}` (no `session_id`) force-tears-down every holder | `{"ok":true,"open_mounts":n}`                     |
+| `status`  | `{"op":"status"}`                                                                                                                                                           | `{"ok":true,"open_mounts":n}`                     |
+
+@TODO add leases
 
 ## Installation
 

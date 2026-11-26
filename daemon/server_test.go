@@ -38,10 +38,11 @@ func policyStore(t *testing.T, roots ...string) *policy.Store {
 	return policy.NewStore(p)
 }
 
-func newTestServer(t *testing.T, allowedUID uint32, roots ...string) string {
+func newTestServer(t *testing.T, allowedUID uint32, roots ...string) (*fakeMounter, string) {
 	t.Helper()
 	socket := filepath.Join(t.TempDir(), "ctl", "wc-fuse.sock")
-	mounts := NewMountManager(newFakeMounter(), filepath.Join(t.TempDir(), "workspace"))
+	fake := newFakeMounter()
+	mounts := NewMountManager(fake, filepath.Join(t.TempDir(), "workspace"))
 	srv, err := NewServer(Config{
 		SocketPath: socket,
 		AllowedUID: allowedUID,
@@ -53,7 +54,7 @@ func newTestServer(t *testing.T, allowedUID uint32, roots ...string) string {
 	}
 	go func() { _ = srv.Serve() }()
 	t.Cleanup(func() { _ = srv.Close() })
-	return socket
+	return fake, socket
 }
 
 func roundTrip(t *testing.T, socket string, req protocol.Request) protocol.Response {
@@ -74,8 +75,8 @@ func roundTrip(t *testing.T, socket string, req protocol.Request) protocol.Respo
 }
 
 func TestServerMountUnmountStatus(t *testing.T) {
-	socket := newTestServer(t, uint32(os.Getuid()), "/home/eric/src")
-	root := "/home/eric/src/proj"
+	_, socket := newTestServer(t, uint32(os.Getuid()), "/srv/wc/projects")
+	root := "/srv/wc/projects/proj"
 
 	resp := roundTrip(t, socket, protocol.Request{Op: protocol.OpMount, SessionID: "s1", ProjectRoot: root})
 	if !resp.OK {
@@ -98,10 +99,91 @@ func TestServerMountUnmountStatus(t *testing.T) {
 	}
 }
 
-func TestServerDeniesOutsideAllowlist(t *testing.T) {
-	socket := newTestServer(t, uint32(os.Getuid()), "/home/eric/src")
+func TestServerSessionRefcount(t *testing.T) {
+	const root = "/srv/wc/projects/proj"
 
-	resp := roundTrip(t, socket, protocol.Request{Op: protocol.OpMount, ProjectRoot: "/etc"})
+	t.Run("shared holders", func(t *testing.T) {
+		fake, socket := newTestServer(t, uint32(os.Getuid()), "/srv/wc/projects")
+
+		resp := roundTrip(t, socket, protocol.Request{Op: protocol.OpMount, SessionID: "s1", ProjectRoot: root})
+		if !resp.OK {
+			t.Fatalf("mount s1 failed: %s %s", resp.Code, resp.Error)
+		}
+		if resp.OpenMounts != 1 {
+			t.Errorf("open mounts after s1 mount = %d, want 1", resp.OpenMounts)
+		}
+		if got := fake.count(); got != 1 {
+			t.Errorf("backing mounts after s1 mount = %d, want 1", got)
+		}
+
+		resp = roundTrip(t, socket, protocol.Request{Op: protocol.OpMount, SessionID: "s2", ProjectRoot: root})
+		if !resp.OK {
+			t.Fatalf("mount s2 failed: %s %s", resp.Code, resp.Error)
+		}
+		if resp.OpenMounts != 1 {
+			t.Errorf("open mounts after s2 mount = %d, want 1", resp.OpenMounts)
+		}
+		if got := fake.count(); got != 1 {
+			t.Errorf("backing mounts after s2 mount = %d, want 1", got)
+		}
+
+		resp = roundTrip(t, socket, protocol.Request{Op: protocol.OpUnmount, SessionID: "s1", ProjectRoot: root})
+		if !resp.OK {
+			t.Fatalf("unmount s1 failed: %s %s", resp.Code, resp.Error)
+		}
+		if resp.OpenMounts != 1 {
+			t.Errorf("open mounts after s1 unmount = %d, want 1", resp.OpenMounts)
+		}
+		if got := fake.count(); got != 1 {
+			t.Errorf("backing mounts after s1 unmount = %d, want 1 (shared mount must stay)", got)
+		}
+
+		if got := roundTrip(t, socket, protocol.Request{Op: protocol.OpStatus}); got.OpenMounts != 1 {
+			t.Errorf("status open mounts after s1 unmount = %d, want 1", got.OpenMounts)
+		}
+
+		resp = roundTrip(t, socket, protocol.Request{Op: protocol.OpUnmount, SessionID: "s2", ProjectRoot: root})
+		if !resp.OK {
+			t.Fatalf("unmount s2 failed: %s %s", resp.Code, resp.Error)
+		}
+		if resp.OpenMounts != 0 {
+			t.Errorf("open mounts after s2 unmount = %d, want 0", resp.OpenMounts)
+		}
+		if got := fake.count(); got != 0 {
+			t.Errorf("backing mounts after s2 unmount = %d, want 0", got)
+		}
+	})
+
+	t.Run("force teardown", func(t *testing.T) {
+		fake, socket := newTestServer(t, uint32(os.Getuid()), "/srv/wc/projects")
+
+		for _, session := range []string{"s1", "s2"} {
+			resp := roundTrip(t, socket, protocol.Request{Op: protocol.OpMount, SessionID: session, ProjectRoot: root})
+			if !resp.OK {
+				t.Fatalf("mount %s failed: %s %s", session, resp.Code, resp.Error)
+			}
+		}
+		if got := fake.count(); got != 1 {
+			t.Errorf("backing mounts after two sessions mount = %d, want 1", got)
+		}
+
+		resp := roundTrip(t, socket, protocol.Request{Op: protocol.OpUnmount, ProjectRoot: root})
+		if !resp.OK {
+			t.Fatalf("force unmount failed: %s %s", resp.Code, resp.Error)
+		}
+		if resp.OpenMounts != 0 {
+			t.Errorf("open mounts after force unmount = %d, want 0", resp.OpenMounts)
+		}
+		if got := fake.count(); got != 0 {
+			t.Errorf("backing mounts after force unmount = %d, want 0", got)
+		}
+	})
+}
+
+func TestServerDeniesOutsideAllowlist(t *testing.T) {
+	_, socket := newTestServer(t, uint32(os.Getuid()), "/srv/wc/projects")
+
+	resp := roundTrip(t, socket, protocol.Request{Op: protocol.OpMount, SessionID: "s1", ProjectRoot: "/etc"})
 	if resp.OK {
 		t.Fatal("mount of a root outside the allowlist must be refused")
 	}
@@ -111,7 +193,7 @@ func TestServerDeniesOutsideAllowlist(t *testing.T) {
 }
 
 func TestServerBadRequests(t *testing.T) {
-	socket := newTestServer(t, uint32(os.Getuid()), "/home/eric/src")
+	_, socket := newTestServer(t, uint32(os.Getuid()), "/srv/wc/projects")
 
 	if resp := roundTrip(t, socket, protocol.Request{Op: "bogus"}); resp.Code != protocol.CodeBadRequest {
 		t.Errorf("unknown op code = %q, want %q", resp.Code, protocol.CodeBadRequest)
@@ -119,12 +201,15 @@ func TestServerBadRequests(t *testing.T) {
 	if resp := roundTrip(t, socket, protocol.Request{Op: protocol.OpMount}); resp.Code != protocol.CodeBadRequest {
 		t.Errorf("missing project_root code = %q, want %q", resp.Code, protocol.CodeBadRequest)
 	}
+	if resp := roundTrip(t, socket, protocol.Request{Op: protocol.OpMount, ProjectRoot: "/srv/wc/projects/proj"}); resp.Code != protocol.CodeBadRequest {
+		t.Errorf("missing session_id code = %q, want %q", resp.Code, protocol.CodeBadRequest)
+	}
 }
 
 func TestServerRejectsForeignUID(t *testing.T) {
-	// Pretend the allowed uid is someone else; our own connection (the
-	// test process uid) must be closed before any request is served.
-	socket := newTestServer(t, uint32(os.Getuid())+1, "/home/eric/src")
+	// The test process uid is not the allowed uid; its connection must be
+	// closed before any request is served.
+	_, socket := newTestServer(t, uint32(os.Getuid())+1, "/srv/wc/projects")
 
 	conn, err := net.Dial("unix", socket)
 	if err != nil {

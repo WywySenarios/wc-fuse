@@ -141,10 +141,13 @@ func (s *Server) dispatch(req *protocol.Request) protocol.Response {
 		if req.ProjectRoot == "" {
 			return errResp(protocol.CodeBadRequest, "project_root is required")
 		}
+		if req.SessionID == "" {
+			return errResp(protocol.CodeBadRequest, "session_id is required")
+		}
 		if !s.cfg.Policy.Current().AllowsProjectRoot(req.ProjectRoot) {
 			return errResp(protocol.CodeDenied, "project_root is outside the configured project-roots")
 		}
-		mp, err := s.cfg.Mounts.Mount(req.ProjectRoot, s.cfg.Policy)
+		mp, err := s.cfg.Mounts.Mount(req.SessionID, req.ProjectRoot, s.cfg.Policy)
 		if err != nil {
 			return errResp(protocol.CodeInternal, err.Error())
 		}
@@ -154,7 +157,7 @@ func (s *Server) dispatch(req *protocol.Request) protocol.Response {
 		if req.ProjectRoot == "" {
 			return errResp(protocol.CodeBadRequest, "project_root is required")
 		}
-		if err := s.cfg.Mounts.Unmount(req.ProjectRoot); err != nil {
+		if err := s.cfg.Mounts.Unmount(req.SessionID, req.ProjectRoot); err != nil {
 			return errResp(protocol.CodeInternal, err.Error())
 		}
 		return protocol.Response{OK: true, OpenMounts: s.cfg.Mounts.OpenMounts()}

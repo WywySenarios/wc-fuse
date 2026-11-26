@@ -95,14 +95,14 @@ permissions:
 }
 
 func TestAllowsProjectRoot(t *testing.T) {
-	p := load(t, "target_home: /w\npermissions: []\n", "project_roots:\n  - /home/eric/src\n")
+	p := load(t, "target_home: /w\npermissions: []\n", "project_roots:\n  - /srv/wc/projects\n")
 	cases := map[string]bool{
-		"/home/eric/src":    true,
-		"/home/eric/src/wc": true,
-		"/home/eric/srcfoo": false,
-		"/home/eric":        false,
-		"/etc":              false,
-		"relative/path":     false,
+		"/srv/wc/projects":    true,
+		"/srv/wc/projects/wc": true,
+		"/srv/wc/projectsfoo": false,
+		"/srv/wc":             false,
+		"/etc":                false,
+		"relative/path":       false,
 	}
 	for path, want := range cases {
 		if got := p.AllowsProjectRoot(path); got != want {
